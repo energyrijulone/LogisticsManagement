@@ -1,0 +1,172 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract LogisticsManagement is Ownable {
+    // Enum for shipment status
+    enum ShipmentStatus { Pending, InTransit, Delivered, Cancelled }
+
+    // Struct for Shipment
+    struct Shipment {
+        uint256 id;
+        string origin;
+        string destination;
+        address sender;
+        address receiver;
+        uint256 timestamp; // Unix timestamp for creation
+        ShipmentStatus status;
+        string description; // Description of goods
+    }
+
+    // Struct for Inventory Item
+    struct InventoryItem {
+        uint256 id;
+        string name;
+        uint256 quantity;
+        string location; // Warehouse or storage location
+    }
+
+    // Counters for IDs
+    uint256 private nextShipmentId = 1;
+    uint256 private nextItemId = 1;
+
+    // Mappings
+    mapping(uint256 => Shipment) public shipments;
+    mapping(uint256 => InventoryItem) public inventory;
+    mapping(address => bool) public authorizedManagers;
+
+    // Events
+    event ShipmentCreated(uint256 indexed shipmentId, address sender, address receiver, string origin, string destination);
+    event ShipmentStatusUpdated(uint256 indexed shipmentId, ShipmentStatus status);
+    event InventoryItemAdded(uint256 indexed itemId, string name, uint256 quantity, string location);
+    event InventoryUpdated(uint256 indexed itemId, uint256 newQuantity, string newLocation);
+    event ManagerAuthorized(address indexed manager);
+    event ManagerRevoked(address indexed manager);
+
+    constructor() Ownable(msg.sender) {}
+
+    // Modifier to restrict access to authorized managers or owner
+    modifier onlyAuthorized() {
+        require(authorizedManagers[msg.sender] || owner() == msg.sender, "Not authorized");
+        _;
+    }
+
+    // Authorize a logistics manager
+    function authorizeManager(address manager) external onlyOwner {
+        require(manager != address(0), "Invalid address");
+        authorizedManagers[manager] = true;
+        emit ManagerAuthorized(manager);
+    }
+
+    // Revoke a manager's authorization
+    function revokeManager(address manager) external onlyOwner {
+        require(authorizedManagers[manager], "Manager not authorized");
+        authorizedManagers[manager] = false;
+        emit ManagerRevoked(manager);
+    }
+
+    // Create a new shipment
+    function createShipment(
+        string memory origin,
+        string memory destination,
+        address receiver,
+        string memory description
+    ) external onlyAuthorized returns (uint256) {
+        require(bytes(origin).length > 0, "Origin cannot be empty");
+        require(bytes(destination).length > 0, "Destination cannot be empty");
+        require(receiver != address(0), "Invalid receiver address");
+        require(bytes(description).length > 0, "Description cannot be empty");
+
+        uint256 shipmentId = nextShipmentId++;
+        shipments[shipmentId] = Shipment(
+            shipmentId,
+            origin,
+            destination,
+            msg.sender,
+            receiver,
+            block.timestamp,
+            ShipmentStatus.Pending,
+            description
+        );
+        emit ShipmentCreated(shipmentId, msg.sender, receiver, origin, destination);
+        return shipmentId;
+    }
+
+    // Update shipment status
+    function updateShipmentStatus(uint256 shipmentId, ShipmentStatus status) external onlyAuthorized {
+        require(shipments[shipmentId].id != 0, "Shipment does not exist");
+        require(status <= ShipmentStatus.Cancelled, "Invalid status");
+        shipments[shipmentId].status = status;
+        emit ShipmentStatusUpdated(shipmentId, status);
+    }
+
+    // Add an inventory item
+    function addInventoryItem(
+        string memory name,
+        uint256 quantity,
+        string memory location
+    ) external onlyAuthorized returns (uint256) {
+        require(bytes(name).length > 0, "Name cannot be empty");
+        require(quantity > 0, "Quantity must be greater than zero");
+        require(bytes(location).length > 0, "Location cannot be empty");
+
+        uint256 itemId = nextItemId++;
+        inventory[itemId] = InventoryItem(itemId, name, quantity, location);
+        emit InventoryItemAdded(itemId, name, quantity, location);
+        return itemId;
+    }
+
+    // Update inventory item
+    function updateInventoryItem(
+        uint256 itemId,
+        uint256 newQuantity,
+        string memory newLocation
+    ) external onlyAuthorized {
+        require(inventory[itemId].id != 0, "Item does not exist");
+        require(newQuantity >= 0, "Quantity cannot be negative");
+        require(bytes(newLocation).length > 0, "Location cannot be empty");
+
+        inventory[itemId].quantity = newQuantity;
+        inventory[itemId].location = newLocation;
+        emit InventoryUpdated(itemId, newQuantity, newLocation);
+    }
+
+    // Get shipment details
+    function getShipment(uint256 shipmentId)
+        external
+        view
+        returns (
+            string memory origin,
+            string memory destination,
+            address sender,
+            address receiver,
+            uint256 timestamp,
+            ShipmentStatus status,
+            string memory description
+        )
+    {
+        require(shipments[shipmentId].id != 0, "Shipment does not exist");
+        Shipment memory shipment = shipments[shipmentId];
+        return (
+            shipment.origin,
+            shipment.destination,
+            shipment.sender,
+            shipment.receiver,
+            shipment.timestamp,
+            shipment.status,
+            shipment.description
+        );
+    }
+
+    // Get inventory item details
+    function getInventoryItem(uint256 itemId)
+        external
+        view
+        returns (string memory name, uint256 quantity, string memory location)
+    {
+        require(inventory[itemId].id != 0, "Item does not exist");
+        InventoryItem memory item = inventory[itemId];
+        return (item.name, item.quantity, item.location);
+    }
+}
