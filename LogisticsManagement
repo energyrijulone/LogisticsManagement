@@ -46,7 +46,7 @@ contract LogisticsManagement is Ownable {
 
     constructor() Ownable(msg.sender) {}
 
-    // Modifier to restrict access to authorized managers or owner
+    // Modifier to restrict accees to authorized managers or owner
     modifier onlyAuthorized() {
         require(authorizedManagers[msg.sender] || owner() == msg.sender, "Not authorized");
         _;
