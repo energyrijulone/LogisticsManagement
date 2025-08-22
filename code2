@@ -1,0 +1,6 @@
+ // Get inventory item details
+    function getInventoryItem(uint256 itemId)
+        external
+        view
+        returns (string memory name, uint256 quantity, string memory location)
+    {
